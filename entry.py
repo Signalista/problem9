@@ -7,15 +7,15 @@ import cv2
 import os
 import time
 import threading
+import planner
 from utils import VLM
 from speech2text import speech2text
+import numpy as np
 
-from core.realsense2 import *
-from core.wrap_xarm import xarm6
-from core.calibrate import Calibration
+from global_vars import robot, realcam
 
-robot = xarm6()  # robot
-realcam = Realsense2()  # camera
+pause_event = threading.Event()
+camera_event = threading.Event()
 
 
 def capture_and_save():
@@ -27,26 +27,24 @@ def capture_and_save():
 
     for img in realcam:
         # 逐帧捕获图像
+        pause_event.wait()
         rgb_img, _, _ = img  # rgb图，深度图，深度信息
 
         # 显示当前帧
-        cv2.imshow('camera', rgb_img)
+        # cv2.imshow('camera', rgb_img)
 
         # 获取当前时间
         current_time = time.time()
 
         # 检查是否到达保存时间间隔
-        if current_time - start_time >= save_interval:
-            cv2.imwrite(f"camera_output/output.jpg", rgb_img)
-            # 更新开始时间
-            start_time = current_time
+        # if current_time - start_time >= save_interval:
+        cv2.imwrite(f"camera_output/output.jpg", rgb_img)
+        # 更新开始时间
+        start_time = current_time
+        camera_event.set()
 
-    cv2.destroyAllWindows()
+    # cv2.destroyAllWindows()
 
-
-# 创建并启动捕获和保存图像的线程
-capture_thread = threading.Thread(target=capture_and_save)
-capture_thread.start()
 
 if __name__ == '__main__':
 
@@ -55,29 +53,39 @@ if __name__ == '__main__':
     executor = Executor()
     prompts = Prompt()
 
-    # robot.move_init_pose()  # 初始位姿
-
     # 获取标定数据
     cal_data = np.load(f'core/data.npy', allow_pickle=True).item()
     RT_cam2gri = cal_data['RT_cam2gripper']
     RT_cam2gri[:3, 3] *= 1000
     RT_obj2cam = np.identity(4)
     RT_gri2base = np.identity(4)
+    robot.move_init_pose()   # 目前太靠左
+
+    time.sleep(2)
+
+    pause_event.set()
+    # 创建并启动捕获和保存图像的线程
+    capture_thread = threading.Thread(target=capture_and_save)
+    capture_thread.start()
 
     # task_instruction = "Please tell me how to reach the red bus."
-    task_instruction = speech2text()
+    # task_instruction = speech2text()
+    task_instruction = "Please move to the green bottle cap."
     VLM_scene_description = None
     flag = 1
 
     while True:
-
         # 保存到特定路径下
         scene_path = f'camera_output/output.jpg'
 
         # 轮询等待图片保存好
-        while not os.path.exists(scene_path):
-            time.sleep(0.5)
-            pass
+        print('camera wait')
+        camera_event.wait()
+        print('camera ready')
+        # while not os.path.exists(scene_path):
+        #     time.sleep(0.5)
+        #     pass
+        pause_event.clear()
 
         # print(realcam)
 
@@ -89,7 +97,6 @@ if __name__ == '__main__':
             VLM_scene_description = perceptor.generate_scene_description(
                 img_path=scene_path,
                 task_instruction=task_instruction)
-
             flag = 0
 
         print("Scene Description: \n")
@@ -103,12 +110,6 @@ if __name__ == '__main__':
         x1, y1 = obj_info1['box']['top_left']
         x2, y2 = obj_info1['box']['bottom_right']
 
-        print('sssss')
-        print(
-            x1 + (x2-x1)/2,
-            y1 - (y1-y2)/2
-        )
-
         goal = prompts.generate_llm_prompt(query=task_instruction,
                                            objects=objects,
                                            desc=VLM_scene_description)
@@ -121,14 +122,22 @@ if __name__ == '__main__':
 
         execution_message = planner.meta_action_to_func_call(meta_actions)
 
+        camera_event.clear()
+        pause_event.set()
+
         VLM_scene_description = perceptor.generate_scene_description(
             img_path=scene_path,
             task_instruction=task_instruction)
 
-        planner.dialog_mem_between_LLM_and_human.append(
-            {'role': 'user',  # 成功执行后，如果尚未完整最终目标，告诉LLM当前的场景描述进入下一轮决策
-             'content': "Execute successfully! Current scene on the table: " + VLM_scene_description})
-
+        if execution_message == "Execute successfully!":
+            planner.dialog_mem_between_LLM_and_human.append(
+                {'role': 'user',  # 成功执行后，如果尚未完整最终目标，告诉LLM当前的场景描述进入下一轮决策
+                'content': f"{execution_message} Current scene on the table: " + VLM_scene_description})
+        else:
+            planner.dialog_mem_between_LLM_and_human.append(
+                {'role': 'user', 'content': execution_message}
+            )
+            
         response = erniebot.ChatCompletion.create(
             model=planner.llm,
             messages=planner.dialog_mem_between_LLM_and_human,

@@ -8,7 +8,7 @@ import erniebot
 
 class LLM:
     # 封装 LLM API call
-    def __init__(self, api_type="aistudio", api_key="57fdaf5eaf0ac0b19d577629f24ef412eaeb18a5", model="ernie-4.0"):
+    def __init__(self, api_type="aistudio", api_key="2f486dfb4e1511984e187e18de9d84dc641a2132", model="ernie-4.0"):
         erniebot.api_type = api_type
         erniebot.access_token = api_key
         self.model = model

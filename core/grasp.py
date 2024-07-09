@@ -1,5 +1,5 @@
 from core.realsense2 import *
-from core.wrap_xarm import xarm6
+from core.wrap_xarm import xarm6_grasp
 # from picodet.predict import PicoDet
 from calibrate import Calibration
 import cv2
@@ -78,7 +78,7 @@ def display(img, results):
 if __name__ == "__main__":
 
     # model = PicoDet("picodet/model/")         # model
-    robot = xarm6()                             # robot
+    robot = xarm6_grasp()                             # robot
     realcam = Realsense2()                      # camera
 
     # #获取标定数据
@@ -115,30 +115,43 @@ if __name__ == "__main__":
                 # print(RT_obj2base[:3, 3])
                 # robot.arm.ToolDOInstant(1,1)
 
-                # 垂直抓放demo
+                #垂直抓放demo
                 # robot.move_xyz([-50, -200, 200])  # 安全（位置很低）
-                # robot.arm.DO(1, 0)  # jia
+                # robot.arm.DO(1, 1)  # jia
                 # time.sleep(3)
                 # robot.move_xyz([50, -300, 100]) #安全（位置很低）
                 # time.sleep(2)
-                # robot.arm.DO(1, 1)   # fang
+                # robot.arm.DO(1, 0)  # fang
                 # if robot.arm.GetToolDO(1) == 1:
                 #     print("成功抓取")
                 # break
 
+                # 插花demo
+                robot.move_xyz([50, -300, 116.7])
+                robot.arm.DO(1, 1)  # jia
+                time.sleep(3)
+                robot.move_xyz([0, -200, 250])
+                time.sleep(3)
+                robot.arm.DO(1, 0)  # fang
+                if robot.arm.GetToolDO(1) == 1:
+                    print("成功抓取")
+                break
+                robot.move
+
+
                 # 连续指令测试
-                robot.move_xyz([-50, -200, 200])
-                time.sleep(0.2)
-                robot.move_xyz([-40, -180, 210])
-                time.sleep(0.2)
-                robot.move_xyz([-30, -160, 220])
-                time.sleep(0.2)
-                robot.move_xyz([-20, -140, 230])
-                time.sleep(0.2)
-                robot.move_xyz([-10, -120, 240])
-                time.sleep(0.2)
-                robot.move_xyz([0, -100, 250])
-                time.sleep(0.2)
+                # robot.move_xyz([-50, -200, 200])
+                # time.sleep(0.2)
+                # robot.move_xyz([-40, -180, 210])
+                # time.sleep(0.2)
+                # robot.move_xyz([-30, -160, 220])
+                # time.sleep(0.2)
+                # robot.move_xyz([-20, -140, 230])
+                # time.sleep(0.2)
+                # robot.move_xyz([-10, -120, 240])
+                # time.sleep(0.2)
+                # robot.move_xyz([0, -100, 250])
+                # time.sleep(0.2)
 
     print("End.")
 

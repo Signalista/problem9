@@ -2,15 +2,16 @@ import erniebot
 import re
 import sys
 import ast
-
+from meta_actions import *
 
 # from utils import LLM, VLM
+from global_vars import robot, realcam
 
 
 class Planner:
 
-    def __init__(self, api_type="aistudio", access_token="063cb576cfab6c008b834835033573653feb38ca",
-                 llm_model='ernie-3.5'):
+    def __init__(self, api_type="aistudio", access_token="2f486dfb4e1511984e187e18de9d84dc641a2132",
+                 llm_model='ernie-4.0'):
         # 可直接改为用政淋封装的
         erniebot.api_type = api_type
         erniebot.access_token = access_token
@@ -25,16 +26,15 @@ class Planner:
         # 接收人类目标指令，并得到相应输出
         prompt = goal
 
-        self.dialog_mem_between_LLM_and_human = [{'role': 'user', 'content': str(prompt)}]
+        self.dialog_mem_between_LLM_and_human = prompt
 
         response = erniebot.ChatCompletion.create(
             model=self.llm,
             messages=self.dialog_mem_between_LLM_and_human,
+            temperature=0.1
         )
 
         step_by_step_plan = response.get_result()
-
-        self.dialog_mem_between_LLM_and_human.append(response.to_message())
 
         return step_by_step_plan
 
@@ -60,14 +60,24 @@ class Planner:
             execution_message = "Function is not executed!"
             find_action = True
             function_names = re.findall(r'(\w+)\(', line)
+
             function_executed = False
             for function_name in function_names:
                 print(function_name)
                 try:
                     func = getattr(sys.modules[__name__], function_name)
-                    arguments = self.extract_params(line, function_name)
+
+                    matches = re.findall(r'{}\((.+?)\)'.format(function_name), line)
+                    arguments = re.split(r'\s*,\s*', matches[0])
+
+                    arguments.append(robot)
+                    arguments.append(realcam)
+
+                    # arguments = self.extract_params(line, function_name)
                     ori_arguments = [str(argument) for argument in arguments]
-                    execution_message = func(*arguments)  # execution_message = "Function is executed successfully!"
+                    execution_message = "Execute successfully!"
+                    # execution_message = "Execute successfully! Now you have picked up the toothbrush, please place it on my palm."
+                    func(*arguments)  # execution_message = "Function is executed successfully!"
                     function_executed = True
                     break  # at most one function is executed in one turn
                 except Exception as e:
@@ -138,22 +148,25 @@ class Planner:
 
 if __name__ == '__main__':
     planner = Planner()
-    step_by_step_plan = planner.respond_human_request([{'role': 'user',
-                                                        'content': "You are a helpful assistant that pays attention to the user's instructions and excels at fulfilling the user's request by operating a robot arm in a tabletop environment.\n        Pay attention to the relationships between objects, including: On, Under, Right, Front, Left, Behind, Next-to, In.\n        To achieve this, you can use the following tools:\n        1. Pick(object): Pick out the object. For example, executing Pick(apple), the robot arm will go to where the apple is and pick it up. \n        2. Move(relation, reference_object): move to the specified position. For example, executing Move(left, banana), the robot arm will move to the left of the banana. \n        3. Place(relation, reference_object): move to the specified position to place the picked object. For example, executing Place(left, banana), the robot arm will move to the left of the banana and place the picked object there. \n        Here are some examples of decomposing a user's request:\n        1. objects = [blue block, yellow block, mug]\n        # User: place the blue block on the yellow block.\n        # Agent should decompose it into these several steps: Pick(blue block), Place(On, yellow block).\n        2. objects = [hand, mouse, bottle]\n        # User: shake hand with me.\n        # Agent should move to where the hand is: Move(Next-to, hand).\n        Notice:\n        1. Single Action Rule: Execute only ONE action at a time. After receiving the observation from its execution, you may proceed with another action. \n        2. DO NOT GENERATE ANYTHING THAT IS NOT SEEN IN THE TABLE.\n        WHEN TO STOP:\n        When the current scene matches the user's request, you must finally answer with DONE.\n        "},
-                                                       {'role': 'assistant',
-                                                        'content': "I've understood your instruction, start please."},
-                                                       {'role': 'user',
-                                                        'content': "Current scene on the table: There are an apple, a banana and a mug on the table. Objects: [apple, banana, mug]. The user's request: Pick up the apple and place it to the left of the banana."},
-                                                       {'role': 'assistant',
-                                                        'content': 'Thought: I need to firstly pick up the apple. \n            Action: Pick(apple)'},
-                                                       {'role': 'user',
-                                                        'content': 'Observation: Execute successfully! Current scene on the table: There are a banana and a mug.'},
-                                                       {'role': 'assistant',
-                                                        'content': 'Thought: I have grasped the apple, so now I just need to place it to the left of the banana.\n            Action: Place(Left, banana)'},
-                                                       {'role': 'user',
-                                                        'content': 'Observation: Execute successfully! Current scene on the table: There is an apple to its right a banana, and also a mug.'},
-                                                       {'role': 'assistant',
-                                                        'content': "Thought: I have fulfilled the user's request. DONE."},
-                                                       {'role': 'user',
-                                                        'content': 'Current scene on the table: {"ref": "white car", "box": {"top_left": [0, 623], "bottom_right": [145, 789]}}. Objects: [\'egg\', \'bottle\', \'pen\']. The user\'s request: Please tell me how to reach the white car..'}])
-    print(step_by_step_plan)
+    # step_by_step_plan = planner.respond_human_request([{'role': 'user',
+    #                                                     'content': "You are a helpful assistant that pays attention to the user's instructions and excels at fulfilling the user's request by operating a robot arm in a tabletop environment.\n        Pay attention to the relationships between objects, including: On, Under, Right, Front, Left, Behind, Next-to, In.\n        To achieve this, you can use the following tools:\n        1. Pick(object): Pick out the object. For example, executing Pick(apple), the robot arm will go to where the apple is and pick it up. \n        2. Move(relation, reference_object): move to the specified position. For example, executing Move(left, banana), the robot arm will move to the left of the banana. \n        3. Place(relation, reference_object): move to the specified position to place the picked object. For example, executing Place(left, banana), the robot arm will move to the left of the banana and place the picked object there. \n        Here are some examples of decomposing a user's request:\n        1. objects = [blue block, yellow block, mug]\n        # User: place the blue block on the yellow block.\n        # Agent should decompose it into these several steps: Pick(blue block), Place(On, yellow block).\n        2. objects = [hand, mouse, bottle]\n        # User: shake hand with me.\n        # Agent should move to where the hand is: Move(Next-to, hand).\n        Notice:\n        1. Single Action Rule: Execute only ONE action at a time. After receiving the observation from its execution, you may proceed with another action. \n        2. DO NOT GENERATE ANYTHING THAT IS NOT SEEN IN THE TABLE.\n        WHEN TO STOP:\n        When the current scene matches the user's request, you must finally answer with DONE.\n        "},
+    #                                                    {'role': 'assistant',
+    #                                                     'content': "I've understood your instruction, start please."},
+    #                                                    {'role': 'user',
+    #                                                     'content': "Current scene on the table: There are an apple, a banana and a mug on the table. Objects: [apple, banana, mug]. The user's request: Pick up the apple and place it to the left of the banana."},
+    #                                                    {'role': 'assistant',
+    #                                                     'content': 'Thought: I need to firstly pick up the apple. \n            Action: Pick(apple)'},
+    #                                                    {'role': 'user',
+    #                                                     'content': 'Observation: Execute successfully! Current scene on the table: There are a banana and a mug.'},
+    #                                                    {'role': 'assistant',
+    #                                                     'content': 'Thought: I have grasped the apple, so now I just need to place it to the left of the banana.\n            Action: Place(Left, banana)'},
+    #                                                    {'role': 'user',
+    #                                                     'content': 'Observation: Execute successfully! Current scene on the table: There is an apple to its right a banana, and also a mug.'},
+    #                                                    {'role': 'assistant',
+    #                                                     'content': "Thought: I have fulfilled the user's request. DONE."},
+    #                                                    {'role': 'user',
+    #                                                     'content': 'Current scene on the table: {"ref": "white car", "box": {"top_left": [0, 623], "bottom_right": [145, 789]}}. Objects: [\'egg\', \'bottle\', \'pen\']. The user\'s request: Please tell me how to reach the white car..'}])
+    # print(step_by_step_plan)
+    planner.extract_params("Action: Move(Next-to, table)")
+
+

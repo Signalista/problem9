@@ -42,11 +42,14 @@ class Perceptor:
 
     def detect_obj_list(self, img_path):
         # 按需得到目标检测框
-        general_prompt = ('What are the major objects in this picture? Output format (Do not generate other content): '
+        general_prompt = ('What are the major objects in this picture? Output format (JSON Format, Do not generate other content): '
                           '{"objects": ["xxx", "xxx", ...]}')
 
         response = self.vlm.mm_conv_call(img_path, general_prompt)
         obj_list = json.loads(response)['objects']
+
+        self.detected_objects = []
+        self.obj_list = []
 
         # 读取图片信息
         image = cv2.imread(img_path)
@@ -62,13 +65,15 @@ class Perceptor:
             x2, y2 = result['box']['bottom_right']
             label = result['ref']
 
-            print('aaaaa')
-            print(width, height)
-
             x1_new = int(x1 * width / 1000)
             y1_new = int(y1 * height / 1000)
             x2_new = int(x2 * width / 1000)
             y2_new = int(y2 * height / 1000)
+
+            # x1_new = x1
+            # y1_new = y1
+            # x2_new = x2
+            # y2_new = y2
 
             self.obj_list.append(label)
             self.detected_objects.append(
